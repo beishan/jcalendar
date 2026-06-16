@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 
 #include <WiFiManager.h>
+#include <WebServer.h>
 
 #include "esp_sleep.h"
 
@@ -36,6 +37,161 @@ WiFiManagerParameter para_cd_day_date("cd_day_date", "日期（yyyyMMdd）", "",
 WiFiManagerParameter para_tag_days("tag_days", "日期Tag（yyyyMMddx，详见README）", "", 30); //     日期Tag
 WiFiManagerParameter para_si_week_1st("si_week_1st", "每周起始（0:周日，1:周一）", "0", 2, "pattern='\\[0-1]{1}'"); //     每周第一天
 WiFiManagerParameter para_study_schedule("study_schedule", "课程表", "0", 4000, "pattern='\\[0-9]{3}[;]$'"); //     每周第一天
+
+// 局域网配置 Web 服务
+WebServer lan_server(80);
+
+void handleRoot() {
+    Preferences pref;
+    pref.begin(PREF_NAMESPACE);
+    String qHost = pref.getString(PREF_QWEATHER_HOST, "api.qweather.com");
+    String qKey = pref.getString(PREF_QWEATHER_KEY, "");
+    String qType = pref.getString(PREF_QWEATHER_TYPE, "0");
+    String qLoc = pref.getString(PREF_QWEATHER_LOC, "");
+    String cdLabel = pref.getString(PREF_CD_DAY_LABLE, "");
+    String cdDate = pref.getString(PREF_CD_DAY_DATE, "");
+    String tagDays = pref.getString(PREF_TAG_DAYS, "");
+    String week1st = pref.getString(PREF_SI_WEEK_1ST, "0");
+    String studySchedule = pref.getString(PREF_STUDY_SCHEDULE, "");
+    pref.end();
+
+    // 天气配置状态
+    String weatherStatus = (qKey.length() > 0 && qLoc.length() > 0)
+        ? "<span style='color:#4CAF50;font-weight:bold'>✓ 已配置</span>"
+        : "<span style='color:#f44336;font-weight:bold'>✗ 未配置（请填写Key和位置ID）</span>";
+
+    String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>J-Calendar</title>"
+        "<style>"
+        "body{font-family:Arial,sans-serif;max-width:480px;margin:20px auto;padding:0 15px;background:#f5f5f5}"
+        "h1{color:#333;text-align:center}"
+        ".card{background:#fff;border-radius:8px;padding:15px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,0.1)}"
+        "label{display:block;font-weight:bold;margin:8px 0 4px;color:#555}"
+        "input,select{width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box}"
+        "button{width:100%;padding:12px;background:#4CAF50;color:#fff;border:none;border-radius:4px;font-size:16px;margin-top:15px;cursor:pointer}"
+        "button:hover{background:#45a049}"
+        ".info{text-align:center;color:#888;font-size:12px;margin-top:20px}"
+        ".status{margin:4px 0 8px;font-size:13px}"
+        "</style></head><body>"
+        "<h1>J-Calendar</h1>"
+        "<form action='/save' method='POST'>"
+        "<div class='card'>"
+        "<label>天气配置 " + weatherStatus + "</label>"
+        "<label>天气API Host</label><input name='qweather_host' value='" + qHost + "'>"
+        "<label>天气API Key</label><input name='qweather_key' value='" + qKey + "' placeholder='请输入和风天气API Key'>"
+        "<label>天气类型</label><select name='qweather_type'>"
+        "<option value='0'" + String(qType == "0" ? " selected" : "") + ">每日天气</option>"
+        "<option value='1'" + String(qType == "1" ? " selected" : "") + ">实时天气</option>"
+        "</select>"
+        "<label>位置</label>"
+        "<select name='qweather_loc' id='qweather_loc' onchange='document.getElementById(\"custom_loc\").style.display=this.value==\"custom\"?\"block\":\"none\"'>"
+        "<option value=''" + String(qLoc == "" ? " selected" : "") + ">请选择城市</option>"
+        "<option value='101010100'" + String(qLoc == "101010100" ? " selected" : "") + ">北京</option>"
+        "<option value='101020100'" + String(qLoc == "101020100" ? " selected" : "") + ">上海</option>"
+        "<option value='101280101'" + String(qLoc == "101280101" ? " selected" : "") + ">广州</option>"
+        "<option value='101280601'" + String(qLoc == "101280601" ? " selected" : "") + ">深圳</option>"
+        "<option value='101210101'" + String(qLoc == "101210101" ? " selected" : "") + ">杭州</option>"
+        "<option value='101270101'" + String(qLoc == "101270101" ? " selected" : "") + ">成都</option>"
+        "<option value='101200101'" + String(qLoc == "101200101" ? " selected" : "") + ">武汉</option>"
+        "<option value='101190101'" + String(qLoc == "101190101" ? " selected" : "") + ">南京</option>"
+        "<option value='101040100'" + String(qLoc == "101040100" ? " selected" : "") + ">重庆</option>"
+        "<option value='101110101'" + String(qLoc == "101110101" ? " selected" : "") + ">西安</option>"
+        "<option value='101030100'" + String(qLoc == "101030100" ? " selected" : "") + ">天津</option>"
+        "<option value='101190401'" + String(qLoc == "101190401" ? " selected" : "") + ">苏州</option>"
+        "<option value='101180101'" + String(qLoc == "101180101" ? " selected" : "") + ">郑州</option>"
+        "<option value='101250101'" + String(qLoc == "101250101" ? " selected" : "") + ">长沙</option>"
+        "<option value='101120201'" + String(qLoc == "101120201" ? " selected" : "") + ">青岛</option>"
+        "<option value='101070201'" + String(qLoc == "101070201" ? " selected" : "") + ">大连</option>"
+        "<option value='101230201'" + String(qLoc == "101230201" ? " selected" : "") + ">厦门</option>"
+        "<option value='101220101'" + String(qLoc == "101220101" ? " selected" : "") + ">合肥</option>"
+        "<option value='101120101'" + String(qLoc == "101120101" ? " selected" : "") + ">济南</option>"
+        "<option value='101290101'" + String(qLoc == "101290101" ? " selected" : "") + ">昆明</option>"
+        "<option value='101050101'" + String(qLoc == "101050101" ? " selected" : "") + ">哈尔滨</option>"
+        "<option value='101070101'" + String(qLoc == "101070101" ? " selected" : "") + ">沈阳</option>"
+        "<option value='101240101'" + String(qLoc == "101240101" ? " selected" : "") + ">南昌</option>"
+        "<option value='101260101'" + String(qLoc == "101260101" ? " selected" : "") + ">贵阳</option>"
+        "<option value='101300101'" + String(qLoc == "101300101" ? " selected" : "") + ">南宁</option>"
+        "<option value='101310101'" + String(qLoc == "101310101" ? " selected" : "") + ">海口</option>"
+        "<option value='101140101'" + String(qLoc == "101140101" ? " selected" : "") + ">拉萨</option>"
+        "<option value='101160101'" + String(qLoc == "101160101" ? " selected" : "") + ">兰州</option>"
+        "<option value='101150101'" + String(qLoc == "101150101" ? " selected" : "") + ">西宁</option>"
+        "<option value='101170101'" + String(qLoc == "101170101" ? " selected" : "") + ">银川</option>"
+        "<option value='101130101'" + String(qLoc == "101130101" ? " selected" : "") + ">乌鲁木齐</option>"
+        "<option value='custom'" + String(qLoc.length() > 0 && qLoc.toInt() == 0 ? " selected" : "") + ">自定义（输入ID）</option>"
+        "</select>"
+        "<div id='custom_loc' style='display:" + String(qLoc.length() > 0 && qLoc.toInt() == 0 ? "block" : "none") + ";margin-top:8px'>"
+        "<input name='qweather_loc_custom' placeholder='输入位置ID' value='" + qLoc + "'>"
+        "</div>"
+        "</div>"
+        "<div class='card'>"
+        "<label>倒数日</label>"
+        "<label>倒数日名称</label><input name='cd_day_label' maxlength='4' value='" + cdLabel + "'>"
+        "<label>倒数日日期</label><input name='cd_day_date' placeholder='yyyyMMdd' value='" + cdDate + "'>"
+        "<label>日期Tag</label><input name='tag_days' placeholder='yyyyMMddx' value='" + tagDays + "'>"
+        "</div>"
+        "<div class='card'>"
+        "<label>显示设置</label>"
+        "<label>每周起始</label><select name='si_week_1st'>"
+        "<option value='0'" + String(week1st == "0" ? " selected" : "") + ">周日</option>"
+        "<option value='1'" + String(week1st == "1" ? " selected" : "") + ">周一</option>"
+        "</select>"
+        "<label>课程表</label><input name='study_schedule' value='" + studySchedule + "'>"
+        "</div>"
+        "<button type='submit'>保存配置</button>"
+        "</form>"
+        "<p class='info'>J-Calendar v" + String(J_VERSION) + "</p>"
+        "</body></html>";
+
+    lan_server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    lan_server.send(200, "text/html", html);
+}
+
+void handleSave() {
+    // 处理位置选择：如果选了"custom"，使用自定义输入的值
+    String qLoc = lan_server.arg("qweather_loc");
+    if (qLoc == "custom") {
+        qLoc = lan_server.arg("qweather_loc_custom");
+    }
+
+    Preferences pref;
+    pref.begin(PREF_NAMESPACE);
+    if (lan_server.hasArg("qweather_host")) pref.putString(PREF_QWEATHER_HOST, lan_server.arg("qweather_host"));
+    if (lan_server.hasArg("qweather_key")) pref.putString(PREF_QWEATHER_KEY, lan_server.arg("qweather_key"));
+    if (lan_server.hasArg("qweather_type")) pref.putString(PREF_QWEATHER_TYPE, lan_server.arg("qweather_type"));
+    if (qLoc.length() > 0) pref.putString(PREF_QWEATHER_LOC, qLoc);
+    if (lan_server.hasArg("cd_day_label")) pref.putString(PREF_CD_DAY_LABLE, lan_server.arg("cd_day_label"));
+    if (lan_server.hasArg("cd_day_date")) pref.putString(PREF_CD_DAY_DATE, lan_server.arg("cd_day_date"));
+    if (lan_server.hasArg("tag_days")) pref.putString(PREF_TAG_DAYS, lan_server.arg("tag_days"));
+    if (lan_server.hasArg("si_week_1st")) pref.putString(PREF_SI_WEEK_1ST, lan_server.arg("si_week_1st"));
+    if (lan_server.hasArg("study_schedule")) pref.putString(PREF_STUDY_SCHEDULE, lan_server.arg("study_schedule"));
+
+    // 验证保存结果
+    String verify_key = pref.getString(PREF_QWEATHER_KEY, "");
+    String verify_loc = pref.getString(PREF_QWEATHER_LOC, "");
+    pref.end();
+
+    Serial.println("[LAN] Config saved:");
+    Serial.printf("  qweather_host: %s\n", lan_server.arg("qweather_host").c_str());
+    Serial.printf("  qweather_key: %s (len=%d)\n", lan_server.arg("qweather_key").c_str(), lan_server.arg("qweather_key").length());
+    Serial.printf("  qweather_type: %s\n", lan_server.arg("qweather_type").c_str());
+    Serial.printf("  qweather_loc (raw): '%s' (len=%d)\n", lan_server.arg("qweather_loc").c_str(), lan_server.arg("qweather_loc").length());
+    Serial.printf("  qweather_loc (processed): '%s' (len=%d)\n", qLoc.c_str(), qLoc.length());
+    Serial.printf("[LAN] Verify - key: %s, loc: %s\n", verify_key.c_str(), verify_loc.c_str());
+
+    String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>J-Calendar</title>"
+        "<style>body{font-family:Arial,sans-serif;text-align:center;padding:50px}"
+        "h2{color:#4CAF50}p{color:#666}</style></head><body>"
+        "<h2>配置已保存</h2><p>设备即将重启...</p></body></html>";
+    lan_server.send(200, "text/html", html);
+
+    si_info("配置已更新");
+
+    delay(1000);
+    ESP.restart();
+}
 
 void print_wakeup_reason() {
     esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
@@ -84,11 +240,16 @@ unsigned long TIME_TO_SLEEP = 180 * 1000;
 
 bool _wifi_flag = false;
 unsigned long _wifi_failed_millis;
+bool _wakeup_by_button = false;
+unsigned long _screen_done_millis = 0;
 void setup() {
     delay(10);
     Serial.begin(115200);
     Serial.println(".");
     print_wakeup_reason();
+    // 判断是否由按键唤醒
+    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+    _wakeup_by_button = (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0);
     Serial.println("\r\n\r\n");
     delay(10);
 
@@ -99,7 +260,7 @@ void setup() {
     Serial.printf("***********************\r\n\r\n");
     Serial.printf("Copyright © 2022-2025 JADE Software Co., Ltd. All Rights Reserved.\r\n\r\n");
 
-    led_init();
+    led_init(); 
     led_on();
     delay(100);
     int voltage = readBatteryVoltage();
@@ -118,7 +279,7 @@ void setup() {
         Serial.println("[INFO]未接电池。");
     }
 
-    button.setClickMs(300);
+    button.setClickMs(500); // 双击间隔时间，从深度睡眠唤醒后需要更大的窗口
     button.setPressMs(3000); // 设置长按的时长
     button.attachClick(buttonClick, &button);
     button.attachDoubleClick(buttonDoubleClick, &button);
@@ -135,6 +296,12 @@ void setup() {
         Serial.println("Connect OK.");
         led_on();
         _wifi_flag = true;
+
+        // 启动局域网配置服务
+        lan_server.on("/", handleRoot);
+        lan_server.on("/save", HTTP_POST, handleSave);
+        lan_server.begin();
+        Serial.printf("LAN Config: http://%s\n", WiFi.localIP().toString().c_str());
     } else {
         Serial.println("Connect failed.");
         _wifi_flag = false;
@@ -163,6 +330,7 @@ void setup() {
 void loop() {
     button.tick(); // 单击，刷新页面；双击，打开配置；长按，重启
     wm.process();
+    lan_server.handleClient();
     // 前置任务：wifi已连接
     // sntp同步
     if (_sntp_status() == -1) {
@@ -182,13 +350,10 @@ void loop() {
     // 前置任务：sntp、weather
     // 执行条件：屏幕状态为待处理
     if (_sntp_status() > 0 && weather_status() > 0 && si_screen_status() == -1) {
-        // 数据获取完毕后，关闭Wifi，省电
-        if (!wm.getConfigPortalActive()) {
-            WiFi.mode(WIFI_OFF);
-        }
-        Serial.println("Wifi closed after data fetch.");
+        Serial.println("Data fetch done, updating screen...");
 
         si_screen();
+        _screen_done_millis = millis();
     }
 
     // 休眠
@@ -197,7 +362,21 @@ void loop() {
     // 未在配置状态，且屏幕刷新完成，进入休眠
     if (!wm.getConfigPortalActive() && si_screen_status() > 0) {
         if (_wifi_flag) {
-            go_sleep();
+            // 检查天气是否已配置，未配置则保持更长唤醒时间
+            Preferences pref;
+            pref.begin(PREF_NAMESPACE);
+            String _key = pref.getString(PREF_QWEATHER_KEY, "");
+            pref.end();
+            bool _weather_configured = _key.length() > 0;
+
+            if (!_wakeup_by_button && _weather_configured) {
+                go_sleep(); // 定时器唤醒且已配置，立即休眠
+            }
+            // 按键唤醒或天气未配置，等待一段时间再休眠
+            unsigned long wait_time = _weather_configured ? 10 * 1000 : 60 * 1000;
+            if (millis() - _screen_done_millis > wait_time) {
+                go_sleep();
+            }
         }
         if (!_wifi_flag && millis() - _wifi_failed_millis > 10 * 1000) { // 如果wifi连接不成功，等待10秒休眠
             go_sleep();
@@ -260,7 +439,7 @@ void buttonDoubleClick(void* oneButton) {
         return;
     }
 
-    if (weather_status == 0) {
+    if (weather_status() == 0) {
         weather_stop();
     }
 
@@ -302,17 +481,25 @@ void buttonDoubleClick(void* oneButton) {
     // std::vector<const char *> menu = {"wifi","wifinoscan","info","param","custom","close","sep","erase","update","restart","exit"};
     std::vector<const char*> menu = { "wifi","param","update","sep","info","restart","exit" };
     wm.setMenu(menu); // custom menu, pass vector
-    wm.setConfigPortalBlocking(false);
-    wm.setBreakAfterConfig(true);
+    wm.setConfigPortalBlocking(true); // 阻塞模式，确保配置页面正常运行
+    wm.setBreakAfterConfig(false); // 保存wifi后不退出配置页面，以便继续配置param
     wm.setPreSaveParamsCallback(preSaveParamsCallback);
     wm.setSaveParamsCallback(saveParamsCallback);
-    wm.setSaveConnect(false); // 保存完wifi信息后是否自动连接，设置为否，以便于用户继续配置param。
-    wm.startConfigPortal("J-Calendar", "password");
+    wm.setSaveConnect(true); // 保存wifi后尝试连接，显示连接状态给用户反馈
+
+    Serial.println("Starting config portal...");
+    Serial.println("AP: J-Calendar, Password: password");
+    Serial.println("Please connect to AP and visit: http://192.168.4.1");
 
     led_config(); // LED 进入三快闪状态
 
     // 控制配置超时180秒后休眠
     _idle_millis = millis();
+    wm.startConfigPortal("J-Calendar", "password");
+
+    // 配置页面退出后（超时或用户关闭），重启设备
+    Serial.println("Config portal closed, restarting...");
+    ESP.restart();
 }
 
 // 重置系统，并重启
@@ -333,6 +520,10 @@ void buttonLongPressStop(void* oneButton) {
 time_t blankTime = 0;
 void go_sleep() {
     uint64_t p;
+
+    // 关闭WiFi，省电
+    WiFi.mode(WIFI_OFF);
+
     // 根据配置情况来刷新，如果未配置qweather信息，则24小时刷新，否则每2小时刷新
     Preferences pref;
     pref.begin(PREF_NAMESPACE);

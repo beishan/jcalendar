@@ -13,3 +13,4 @@ void si_screen();
 void print_status();
 
 void si_warning(const char* str);
+void si_info(const char* str);

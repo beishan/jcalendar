@@ -988,7 +988,7 @@ void si_calendar() {
     localtime_r(&now, &tmInfo); // 时间戳转化为本地时间结构
     Serial.printf("System Time: %d-%02d-%02d %02d:%02d:%02d\n", (tmInfo.tm_year + 1900), tmInfo.tm_mon + 1, tmInfo.tm_mday, tmInfo.tm_hour, tmInfo.tm_min, tmInfo.tm_sec);
 
-    // 如果当前时间无效
+    // 如果当前时间无效，尝试用API时间修复，否则仍继续渲染
     if (tmInfo.tm_year + 1900 < 2025) {
         bool isSetOK = false;
         if (weather_status() == 1) {
@@ -1014,12 +1014,12 @@ void si_calendar() {
                 Serial.println("ERR: Fail to format api time.");
             }
         } else {
-            // 如果天气也未获取成功，那么返回
-            Serial.println("ERR: invalid time & not weather info got.");
+            // 天气也未获取成功，使用当前系统时间继续渲染（可能是1970年）
+            Serial.println("WARN: invalid time & no weather info, rendering with system time.");
         }
         if (!isSetOK) {
-            _calendar_status = 2;
-            return;
+            Serial.println("WARN: Time not synced, calendar may show incorrect date.");
+            // 不再 return，继续使用当前时间渲染
         }
     }
 
@@ -1057,6 +1057,7 @@ void task_screen(void* param) {
     display.setFullWindow();
     display.firstPage();
     display.fillScreen(GxEPD_WHITE);
+    todayColor = GxEPD_RED; // 默认红色，draw_cal_days 中可能根据日期调整
     do {
         if (_si_type == 1) {
             drawStudySchedule();
@@ -1146,6 +1147,41 @@ void si_warning(const char* str) {
         u8g2Fonts.setFont(u8g2_font_open_iconic_all_4x_t);
         u8g2Fonts.setCursor((display.width() - w) / 2, (display.height() + 32) / 2);
         u8g2Fonts.print("\u0118");
+
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+        u8g2Fonts.setCursor(u8g2Fonts.getCursorX() + space, u8g2Fonts.getCursorY() - 8);
+        u8g2Fonts.setFont(FONT_TEXT);
+        u8g2Fonts.print(str);
+    } while (display.nextPage());
+
+    display.powerOff();
+    display.hibernate();
+}
+
+void si_info(const char* str) {
+    Serial.println("Screen info...");
+    display.init(115200);
+    display.setRotation(ROTATION);
+    u8g2Fonts.begin(display);
+
+    display.setFullWindow();
+    display.fillScreen(GxEPD_WHITE);
+    do {
+        u8g2Fonts.setFontMode(1);
+        u8g2Fonts.setFontDirection(0);
+        u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+
+        u8g2Fonts.setFont(u8g2_font_open_iconic_all_4x_t);
+        int space = 8;
+        int w = u8g2Fonts.getUTF8Width("M") + space;
+        u8g2Fonts.setFont(FONT_TEXT);
+        w += u8g2Fonts.getUTF8Width(str);
+
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+        u8g2Fonts.setFont(u8g2_font_open_iconic_all_4x_t);
+        u8g2Fonts.setCursor((display.width() - w) / 2, (display.height() + 32) / 2);
+        u8g2Fonts.print("M");
 
         u8g2Fonts.setForegroundColor(GxEPD_BLACK);
         u8g2Fonts.setCursor(u8g2Fonts.getCursorX() + space, u8g2Fonts.getCursorY() - 8);

@@ -40,6 +40,9 @@ void task_weather(void* param) {
     pref.end();
 
     Serial.printf("Weather Type: %d\n", _weather_type);
+    Serial.printf("Weather Host: %s\n", _qweather_host.c_str());
+    Serial.printf("Weather Key: %s\n", _qweather_key.c_str());
+    Serial.printf("Weather Loc: %s\n", _qweather_loc.c_str());
 
     API<> api;
 
@@ -52,8 +55,10 @@ void task_weather(void* param) {
     }
     if (success) {
         _weather_status = 1;
+        Serial.println("[Task] get weather OK.");
     } else {
         _weather_status = 2;
+        Serial.println("[Task] get weather FAILED.");
     }
 
     Serial.println("[Task] get weather end...");
@@ -79,6 +84,10 @@ void weather_exec(int status) {
     _qweather_key = pref.getString(PREF_QWEATHER_KEY, "");
     _qweather_loc = pref.getString(PREF_QWEATHER_LOC, "");
     pref.end();
+
+    Serial.printf("Weather config - host: %s, key: %s (len=%d), loc: %s (len=%d)\n",
+        _qweather_host.c_str(), _qweather_key.c_str(), _qweather_key.length(),
+        _qweather_loc.c_str(), _qweather_loc.length());
 
     if (_qweather_key.length() == 0 || _qweather_loc.length() == 0) {
         Serial.println("Qweather key/locationID invalid.");
