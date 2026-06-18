@@ -234,6 +234,8 @@ void buttonClick(void* oneButton);
 void buttonDoubleClick(void* oneButton);
 void buttonLongPressStop(void* oneButton);
 void go_sleep();
+void saveParamsCallback();
+void preSaveParamsCallback();
 
 unsigned long _idle_millis;
 unsigned long TIME_TO_SLEEP = 180 * 1000;
@@ -242,6 +244,7 @@ bool _wifi_flag = false;
 unsigned long _wifi_failed_millis;
 bool _wakeup_by_button = false;
 unsigned long _screen_done_millis = 0;
+bool _new_device_mode = false; // 新设备配网模式
 void setup() {
     delay(10);
     Serial.begin(115200);
@@ -292,6 +295,7 @@ void setup() {
     wm.setHostname("J-Calendar");
     wm.setEnableConfigPortal(false);
     wm.setConnectTimeout(10);
+
     if (wm.autoConnect()) {
         Serial.println("Connect OK.");
         led_on();
@@ -306,6 +310,68 @@ void setup() {
         Serial.println("Connect failed.");
         _wifi_flag = false;
         _wifi_failed_millis = millis();
+
+        // 检查是否是新设备（未配置过任何参数）
+        Preferences pref;
+        pref.begin(PREF_NAMESPACE);
+        String _qweather_key = pref.getString(PREF_QWEATHER_KEY, "");
+        pref.end();
+        bool is_new_device = (_qweather_key.length() == 0);
+
+        if (is_new_device) {
+            // 新设备，显示配网提示页面
+            Serial.println("New device detected, showing setup guide...");
+            _new_device_mode = true;
+            si_setup_guide("J-Calendar", "password");
+
+            // 自动启动配置模式（AP 热点）
+            Serial.println("Starting config portal for new device...");
+            Serial.println("AP: J-Calendar, Password: password");
+            led_config(); // LED 进入三快闪状态
+
+            // 设置配置参数默认值
+            Preferences pref;
+            pref.begin(PREF_NAMESPACE);
+            String qHost = pref.getString(PREF_QWEATHER_HOST, "api.qweather.com");
+            String qType = pref.getString(PREF_QWEATHER_TYPE, "0");
+            String week1st = pref.getString(PREF_SI_WEEK_1ST, "0");
+            pref.end();
+
+            para_qweather_host.setValue(qHost.c_str(), 64);
+            para_qweather_type.setValue(qType.c_str(), 1);
+            para_si_week_1st.setValue(week1st.c_str(), 1);
+
+            // 添加配置参数
+            wm.setTitle("J-Calendar");
+            wm.addParameter(&para_si_week_1st);
+            wm.addParameter(&para_qweather_host);
+            wm.addParameter(&para_qweather_key);
+            wm.addParameter(&para_qweather_type);
+            wm.addParameter(&para_qweather_location);
+            wm.addParameter(&para_cd_day_label);
+            wm.addParameter(&para_cd_day_date);
+            wm.addParameter(&para_tag_days);
+            wm.addParameter(&para_study_schedule);
+
+            // 设置配置菜单
+            std::vector<const char*> menu = { "wifi","param","update","sep","info","restart","exit" };
+            wm.setMenu(menu);
+            wm.setConfigPortalBlocking(false);
+            wm.setBreakAfterConfig(false);
+            wm.setSaveParamsCallback(saveParamsCallback);
+            wm.setSaveConnect(true);
+
+            // 启动配置门户
+            wm.startConfigPortal("J-Calendar", "password");
+
+            // 不执行后续的 SNTP 和天气获取
+            return;
+        } else {
+            // 老设备WiFi连接失败，显示警告
+            Serial.println("WiFi connect failed for configured device.");
+            si_warning("WiFi连接失败");
+        }
+
         led_slow();
         _sntp_exec(2);
         weather_exec(2);
@@ -329,6 +395,19 @@ void setup() {
  */
 void loop() {
     button.tick(); // 单击，刷新页面；双击，打开配置；长按，重启
+
+    // 新设备配网模式：处理配置门户事件
+    if (_new_device_mode) {
+        wm.process(); // 处理配置门户请求
+        // 超时休眠（3分钟）
+        if (millis() - _wifi_failed_millis > 180 * 1000) {
+            Serial.println("New device mode timeout, going to sleep...");
+            go_sleep();
+        }
+        delay(10);
+        return;
+    }
+
     wm.process();
     lan_server.handleClient();
     // 前置任务：wifi已连接

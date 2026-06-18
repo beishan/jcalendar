@@ -14,3 +14,4 @@ void print_status();
 
 void si_warning(const char* str);
 void si_info(const char* str);
+void si_setup_guide(const char* ap_name, const char* ap_password);

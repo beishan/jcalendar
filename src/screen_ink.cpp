@@ -1192,3 +1192,92 @@ void si_info(const char* str) {
     display.powerOff();
     display.hibernate();
 }
+
+void si_setup_guide(const char* ap_name, const char* ap_password) {
+    Serial.println("Screen setup guide...");
+    display.init(115200);
+    display.setRotation(ROTATION);
+    u8g2Fonts.begin(display);
+
+    display.setFullWindow();
+    display.fillScreen(GxEPD_WHITE);
+    do {
+        u8g2Fonts.setFontMode(1);
+        u8g2Fonts.setFontDirection(0);
+        u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+
+        int y = 30;
+        int centerX = display.width() / 2;
+
+        // 标题 - J-Calendar
+        u8g2Fonts.setFont(FONT_TEXT);
+        const char* title = "J-Calendar";
+        int titleW = u8g2Fonts.getUTF8Width(title);
+        u8g2Fonts.setCursor(centerX - titleW / 2, y);
+        u8g2Fonts.print(title);
+        y += 35;
+
+        // 副标题 - 首次使用配网提示
+        const char* subtitle = "首次使用，请先配置WiFi";
+        int subW = u8g2Fonts.getUTF8Width(subtitle);
+        u8g2Fonts.setCursor(centerX - subW / 2, y);
+        u8g2Fonts.setForegroundColor(GxEPD_RED);
+        u8g2Fonts.print(subtitle);
+        y += 30;
+
+        // 分隔线
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+        display.drawLine(40, y, display.width() - 40, y, GxEPD_BLACK);
+        y += 20;
+
+        // 步骤1 - 连接WiFi
+        u8g2Fonts.setCursor(30, y);
+        u8g2Fonts.print("1. 手机连接以下WiFi:");
+        y += 22;
+
+        // WiFi名称
+        u8g2Fonts.setCursor(50, y);
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+        u8g2Fonts.print("名称: ");
+        u8g2Fonts.setForegroundColor(GxEPD_RED);
+        u8g2Fonts.print(ap_name);
+        y += 22;
+
+        // WiFi密码
+        u8g2Fonts.setCursor(50, y);
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+        u8g2Fonts.print("密码: ");
+        u8g2Fonts.setForegroundColor(GxEPD_RED);
+        u8g2Fonts.print(ap_password);
+        y += 25;
+
+        // 步骤2 - 打开配置页面
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+        u8g2Fonts.setCursor(30, y);
+        u8g2Fonts.print("2. 浏览器打开配置页面:");
+        y += 22;
+
+        // 配置页面地址
+        u8g2Fonts.setCursor(50, y);
+        u8g2Fonts.setForegroundColor(GxEPD_RED);
+        u8g2Fonts.print("http://192.168.4.1");
+        y += 25;
+
+        // 步骤3 - 选择WiFi并配置
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+        u8g2Fonts.setCursor(30, y);
+        u8g2Fonts.print("3. 选择家中WiFi并保存");
+        y += 30;
+
+        // 提示信息
+        u8g2Fonts.setFont(FONT_SUB);
+        u8g2Fonts.setCursor(centerX - 120, y);
+        u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+        u8g2Fonts.print("配置完成后设备将自动重启");
+
+    } while (display.nextPage());
+
+    display.powerOff();
+    display.hibernate();
+}
