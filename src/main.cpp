@@ -225,6 +225,11 @@ void print_wakeup_reason() {
     case ESP_SLEEP_WAKEUP_ULP:
         Serial.println("Wakeup caused by ULP program");
         break;
+#ifdef ESP32S3_N16R8
+    case ESP_SLEEP_WAKEUP_GPIO:
+        Serial.println("Wakeup caused by GPIO");
+        break;
+#endif
     default:
         Serial.printf("Wakeup was not caused by deep sleep.\r\n");
     }
@@ -249,10 +254,17 @@ void setup() {
     delay(10);
     Serial.begin(115200);
     Serial.println(".");
+#ifdef ESP32S3_N16R8
+    while (!Serial && millis() < 3000) { delay(10); } // Wait for USB CDC Serial on S3
+#endif
     print_wakeup_reason();
     // 判断是否由按键唤醒
     esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+#ifdef ESP32S3_N16R8
+    _wakeup_by_button = (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO); // S3: GPIO wakeup (not ext0 RTC)
+#else
     _wakeup_by_button = (wakeup_reason == ESP_SLEEP_WAKEUP_EXT0);
+#endif
     Serial.println("\r\n\r\n");
     delay(10);
 
@@ -631,10 +643,19 @@ void go_sleep() {
     }
 
     esp_sleep_enable_timer_wakeup(p * (uint64_t)uS_TO_S_FACTOR);
+#ifdef ESP32S3_N16R8
+    gpio_wakeup_enable(KEY_M, GPIO_INTR_LOW_LEVEL);
+    esp_sleep_enable_gpio_wakeup(); // S3: GPIO14 is not RTC, use GPIO wakeup (works with any pin)
+#else
     esp_sleep_enable_ext0_wakeup(KEY_M, LOW);
+#endif
 
     // 省电考虑，关闭RTC外设和存储器
+#ifdef ESP32S3_N16R8
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF); // S3: GPIO wakeup doesn't need RTC_IO, safe to power off
+#else
     // esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF); // RTC IO, sensors and ULP, 注意：由于需要按键唤醒，所以不能关闭，否则会导致RTC_IO唤醒(ext0)失败
+#endif
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF); // 
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
     esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
@@ -647,7 +668,7 @@ void go_sleep() {
     gpio_reset_pin(SPI_CS); // 减小deep-sleep电流
     gpio_reset_pin(SPI_DC); // 减小deep-sleep电流
     gpio_reset_pin(SPI_RST); // 减小deep-sleep电流
-    gpio_reset_pin(SPI_BUSY); // 减小deep-sleep电流`
+    gpio_reset_pin(SPI_BUSY); // 减小deep-sleep电流
     gpio_reset_pin(SPI_MOSI); // 减小deep-sleep电流
     gpio_reset_pin(SPI_MISO); // 减小deep-sleep电流
     gpio_reset_pin(SPI_SCK); // 减小deep-sleep电流
