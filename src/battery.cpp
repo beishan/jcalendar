@@ -16,26 +16,20 @@
  */
 #include "battery.h"
 
-#include "driver/adc.h"
-#include "esp_adc_cal.h"
 #include <Arduino.h>
+#include "wiring.h"
 
 /**
  * 获取电池电压（mV）
  */
 int readBatteryVoltage() {
-    static const adc1_channel_t channel = ADC1_CHANNEL_4;  // GPIO32
-    adc1_config_width(ADC_WIDTH_BIT_12);
-    adc1_config_channel_atten(channel, ADC_ATTEN_11db);
-    adc_power_acquire();
+    const uint8_t adcPin = static_cast<uint8_t>(PIN_ADC);
+    pinMode(adcPin, INPUT);
+    analogReadResolution(12);
+#if defined(ESP32)
+    analogSetPinAttenuation(adcPin, ADC_11db);
+#endif
     delay(10);
-    int adc_val = adc1_get_raw(channel);
-    adc_power_release();
 
-    esp_adc_cal_characteristics_t adc_chars;
-    esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_11db, ADC_WIDTH_BIT_12, 1100, &adc_chars);
-    int voltage = esp_adc_cal_raw_to_voltage(adc_val, &adc_chars);
-    voltage *= 2;
-
-    return voltage;
+    return analogReadMilliVolts(adcPin) * BATTERY_VOLTAGE_DIVIDER;
 }

@@ -13,6 +13,7 @@ int voltage;
 
 #include <U8g2_for_Adafruit_GFX.h>
 #include <GxEPD2_3C.h>
+#include <SPI.h>
 #include "GxEPD2_display_selection_new_style.h"
 
 #include "font.h"
@@ -21,6 +22,10 @@ int voltage;
 #include "wiring.h"
 GxEPD2_DISPLAY_CLASS<GxEPD2_DRIVER_CLASS, GxEPD2_DRIVER_CLASS::HEIGHT> display(GxEPD2_DRIVER_CLASS(/*CS=D8*/ SPI_CS, /*DC=D3*/ SPI_DC, /*RST=D4*/ SPI_RST, /*BUSY=D2*/ SPI_BUSY));
 U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
+
+static void init_display_bus() {
+    SPI.begin(static_cast<int8_t>(SPI_SCK), static_cast<int8_t>(SPI_MISO), static_cast<int8_t>(SPI_MOSI), static_cast<int8_t>(SPI_CS));
+}
 
 #define FONT_TEXT u8g2_font_wqy16_t_gb2312 // 224825bytes，最大字库（天气描述中“霾”，只有此字库中有）
 #define FONT_SUB u8g2_font_wqy12_t_gb2312 // 次要字体，u8g2最小字体
@@ -1048,6 +1053,7 @@ void task_screen(void* param) {
     voltage = readBatteryVoltage();
 
     delay(100);
+    init_display_bus();
 
     display.init(115200);          // 串口使能 初始化完全刷新使能 复位时间 ret上拉使能
     display.setRotation(ROTATION); // 设置屏幕旋转1和3是横向  0和2是纵向
@@ -1125,6 +1131,7 @@ void print_status() {
 
 void si_warning(const char* str) {
     Serial.println("Screen warning...");
+    init_display_bus();
     display.init(115200);          // 串口使能 初始化完全刷新使能 复位时间 ret上拉使能
     display.setRotation(ROTATION); // 设置屏幕旋转1和3是横向  0和2是纵向
     u8g2Fonts.begin(display);
@@ -1160,6 +1167,7 @@ void si_warning(const char* str) {
 
 void si_info(const char* str) {
     Serial.println("Screen info...");
+    init_display_bus();
     display.init(115200);
     display.setRotation(ROTATION);
     u8g2Fonts.begin(display);
@@ -1195,6 +1203,7 @@ void si_info(const char* str) {
 
 void si_setup_guide(const char* ap_name, const char* ap_password) {
     Serial.println("Screen setup guide...");
+    init_display_bus();
     display.init(115200);
     display.setRotation(ROTATION);
     u8g2Fonts.begin(display);
