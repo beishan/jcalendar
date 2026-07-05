@@ -42,18 +42,15 @@ WiFiManagerParameter para_study_schedule("study_schedule", "课程表", "0", 400
 WebServer lan_server(80);
 
 void handleRoot() {
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE);
-    String qHost = pref.getString(PREF_QWEATHER_HOST, "api.qweather.com");
-    String qKey = pref.getString(PREF_QWEATHER_KEY, "");
-    String qType = pref.getString(PREF_QWEATHER_TYPE, "0");
-    String qLoc = pref.getString(PREF_QWEATHER_LOC, "");
-    String cdLabel = pref.getString(PREF_CD_DAY_LABLE, "");
-    String cdDate = pref.getString(PREF_CD_DAY_DATE, "");
-    String tagDays = pref.getString(PREF_TAG_DAYS, "");
-    String week1st = pref.getString(PREF_SI_WEEK_1ST, "0");
-    String studySchedule = pref.getString(PREF_STUDY_SCHEDULE, "");
-    pref.end();
+    String qHost = safeGetString(PREF_QWEATHER_HOST, "api.qweather.com");
+    String qKey = safeGetString(PREF_QWEATHER_KEY, "");
+    String qType = safeGetString(PREF_QWEATHER_TYPE, "0");
+    String qLoc = safeGetString(PREF_QWEATHER_LOC, "");
+    String cdLabel = safeGetString(PREF_CD_DAY_LABLE, "");
+    String cdDate = safeGetString(PREF_CD_DAY_DATE, "");
+    String tagDays = safeGetString(PREF_TAG_DAYS, "");
+    String week1st = safeGetString(PREF_SI_WEEK_1ST, "0");
+    String studySchedule = safeGetString(PREF_STUDY_SCHEDULE, "");
 
     // 天气配置状态
     String weatherStatus = (qKey.length() > 0 && qLoc.length() > 0)
@@ -167,9 +164,9 @@ void handleSave() {
     if (lan_server.hasArg("study_schedule")) pref.putString(PREF_STUDY_SCHEDULE, lan_server.arg("study_schedule"));
 
     // 验证保存结果
-    String verify_key = pref.getString(PREF_QWEATHER_KEY, "");
-    String verify_loc = pref.getString(PREF_QWEATHER_LOC, "");
     pref.end();
+    String verify_key = safeGetString(PREF_QWEATHER_KEY, "");
+    String verify_loc = safeGetString(PREF_QWEATHER_LOC, "");
 
     Serial.println("[LAN] Config saved:");
     Serial.printf("  qweather_host: %s\n", lan_server.arg("qweather_host").c_str());
@@ -258,7 +255,7 @@ void setup() {
 
 
     Serial.printf("***********************\r\n");
-    Serial.printf("      J-Calendar\r\n");
+    Serial.printf("      Miaomiao Calendar\r\n");
     Serial.printf("    version: %s\r\n", J_VERSION);
     Serial.printf("***********************\r\n\r\n");
     Serial.printf("Copyright © 2022-2025 JADE Software Co., Ltd. All Rights Reserved.\r\n\r\n");
@@ -282,8 +279,9 @@ void setup() {
         Serial.println("[INFO]未接电池。");
     }
 
-    button.setClickMs(500); // 双击间隔时间，从深度睡眠唤醒后需要更大的窗口
-    button.setPressMs(3000); // 设置长按的时长
+    button.setDebounceMs(50);   // 防抖时间 50ms
+    button.setClickMs(300);     // 单击确认时间（缩短，更容易触发单击）
+    button.setPressMs(3000);    // 设置长按的时长
     button.attachClick(buttonClick, &button);
     button.attachDoubleClick(buttonDoubleClick, &button);
     // button.attachMultiClick()
@@ -295,6 +293,8 @@ void setup() {
     wm.setHostname("J-Calendar");
     wm.setEnableConfigPortal(false);
     wm.setConnectTimeout(10);
+    bool wifi_is_saved = wm.getWiFiIsSaved();
+    Serial.printf("WiFi saved: %s\r\n", wifi_is_saved ? "yes" : "no");
 
     if (wm.autoConnect()) {
         Serial.println("Connect OK.");
@@ -311,72 +311,54 @@ void setup() {
         _wifi_flag = false;
         _wifi_failed_millis = millis();
 
-        // 检查是否是新设备（未配置过任何参数）
-        Preferences pref;
-        pref.begin(PREF_NAMESPACE);
-        String _qweather_key = pref.getString(PREF_QWEATHER_KEY, "");
-        pref.end();
-        bool is_new_device = (_qweather_key.length() == 0);
+        // Auto-connect failed; keep the device awake in config portal mode.
+        Serial.println("WiFi not connected, showing setup guide...");
+        // 新设备，显示配网提示页面
+        Serial.println("New device detected, showing setup guide...");
+        _new_device_mode = true;
+        si_setup_guide("J-Calendar", "password");
 
-        if (is_new_device) {
-            // 新设备，显示配网提示页面
-            Serial.println("New device detected, showing setup guide...");
-            _new_device_mode = true;
-            si_setup_guide("J-Calendar", "password");
+        // 自动启动配置模式（AP 热点）
+        Serial.println("Starting config portal for new device...");
+        Serial.println("AP: J-Calendar, Password: password");
+        led_config(); // LED 进入三快闪状态
 
-            // 自动启动配置模式（AP 热点）
-            Serial.println("Starting config portal for new device...");
-            Serial.println("AP: J-Calendar, Password: password");
-            led_config(); // LED 进入三快闪状态
+        // 设置配置参数默认值
+        String qHost = safeGetString(PREF_QWEATHER_HOST, "api.qweather.com");
+        String qType = safeGetString(PREF_QWEATHER_TYPE, "0");
+        String week1st = safeGetString(PREF_SI_WEEK_1ST, "0");
 
-            // 设置配置参数默认值
-            Preferences pref;
-            pref.begin(PREF_NAMESPACE);
-            String qHost = pref.getString(PREF_QWEATHER_HOST, "api.qweather.com");
-            String qType = pref.getString(PREF_QWEATHER_TYPE, "0");
-            String week1st = pref.getString(PREF_SI_WEEK_1ST, "0");
-            pref.end();
+        para_qweather_host.setValue(qHost.c_str(), 64);
+        para_qweather_type.setValue(qType.c_str(), 1);
+        para_si_week_1st.setValue(week1st.c_str(), 1);
 
-            para_qweather_host.setValue(qHost.c_str(), 64);
-            para_qweather_type.setValue(qType.c_str(), 1);
-            para_si_week_1st.setValue(week1st.c_str(), 1);
+        // 添加配置参数
+        wm.setTitle("J-Calendar");
+        wm.addParameter(&para_si_week_1st);
+        wm.addParameter(&para_qweather_host);
+        wm.addParameter(&para_qweather_key);
+        wm.addParameter(&para_qweather_type);
+        wm.addParameter(&para_qweather_location);
+        wm.addParameter(&para_cd_day_label);
+        wm.addParameter(&para_cd_day_date);
+        wm.addParameter(&para_tag_days);
+        wm.addParameter(&para_study_schedule);
 
-            // 添加配置参数
-            wm.setTitle("J-Calendar");
-            wm.addParameter(&para_si_week_1st);
-            wm.addParameter(&para_qweather_host);
-            wm.addParameter(&para_qweather_key);
-            wm.addParameter(&para_qweather_type);
-            wm.addParameter(&para_qweather_location);
-            wm.addParameter(&para_cd_day_label);
-            wm.addParameter(&para_cd_day_date);
-            wm.addParameter(&para_tag_days);
-            wm.addParameter(&para_study_schedule);
+        // 设置配置菜单
+        std::vector<const char*> menu = { "wifi","param","update","sep","info","restart","exit" };
+        wm.setMenu(menu);
+        wm.setConfigPortalBlocking(false);
+        wm.setBreakAfterConfig(false);
+        wm.setSaveParamsCallback(saveParamsCallback);
+        wm.setSaveConnect(true);
 
-            // 设置配置菜单
-            std::vector<const char*> menu = { "wifi","param","update","sep","info","restart","exit" };
-            wm.setMenu(menu);
-            wm.setConfigPortalBlocking(false);
-            wm.setBreakAfterConfig(false);
-            wm.setSaveParamsCallback(saveParamsCallback);
-            wm.setSaveConnect(true);
+        // 启动配置门户
+        wm.startConfigPortal("J-Calendar", "password");
 
-            // 启动配置门户
-            wm.startConfigPortal("J-Calendar", "password");
+        // 不执行后续的 SNTP 和天气获取
+        return;
+        
 
-            // 不执行后续的 SNTP 和天气获取
-            return;
-        } else {
-            // 老设备WiFi连接失败，显示警告
-            Serial.println("WiFi connect failed for configured device.");
-            si_warning("WiFi连接失败");
-        }
-
-        led_slow();
-        _sntp_exec(2);
-        weather_exec(2);
-        WiFi.mode(WIFI_OFF); // 提前关闭WIFI，省电
-        Serial.println("Wifi closed.");
     }
 }
 
@@ -395,6 +377,13 @@ void setup() {
  */
 void loop() {
     button.tick(); // 单击，刷新页面；双击，打开配置；长按，重启
+
+    // 调试：打印按钮引脚状态
+    static unsigned long lastDebugTime = 0;
+    if (millis() - lastDebugTime > 5000) {  // 每5秒打印一次
+        Serial.printf("Button pin (GPIO%d) state: %d\n", KEY_M, digitalRead(KEY_M));
+        lastDebugTime = millis();
+    }
 
     // 新设备配网模式：处理配置门户事件
     if (_new_device_mode) {
@@ -420,8 +409,8 @@ void loop() {
         go_sleep();
     }
     // 前置任务：wifi已连接
-    // 获取Weather信息
-    if (weather_status() == -1) {
+    // 获取Weather信息（状态为-1:初始, 2:失败, 3:未配置时重新获取）
+    if (weather_status() == -1 || weather_status() == 2 || weather_status() == 3) {
         weather_exec();
     }
 
@@ -442,10 +431,7 @@ void loop() {
     if (!wm.getConfigPortalActive() && si_screen_status() > 0) {
         if (_wifi_flag) {
             // 检查天气是否已配置，未配置则保持更长唤醒时间
-            Preferences pref;
-            pref.begin(PREF_NAMESPACE);
-            String _key = pref.getString(PREF_QWEATHER_KEY, "");
-            pref.end();
+            String _key = safeGetString(PREF_QWEATHER_KEY, "");
             bool _weather_configured = _key.length() > 0;
 
             if (!_wakeup_by_button && _weather_configured) {
@@ -472,16 +458,42 @@ void loop() {
 
 // 刷新页面
 void buttonClick(void* oneButton) {
-    Serial.println("Button click.");
+    Serial.println(">>> Button single click triggered!");
+
     if (wm.getConfigPortalActive()) {
         Serial.println("In config status.");
     } else {
+        // 检查时间是否有效
+        time_t now = time(NULL);
+        struct tm tmInfo;
+        localtime_r(&now, &tmInfo);
+
+        if (tmInfo.tm_year + 1900 < 2025) {
+            Serial.println("Time not synced yet, waiting...");
+            // 等待 SNTP 同步完成
+            if (_sntp_status() == SYNC_STATUS_IDLE) {
+                _sntp_exec();
+            }
+            // 等待最多 15 秒
+            unsigned long start = millis();
+            while (_sntp_status() == SYNC_STATUS_IN_PROGRESS && millis() - start < 15000) {
+                delay(100);
+            }
+            // 再次检查时间
+            time(&now);
+            localtime_r(&now, &tmInfo);
+            if (tmInfo.tm_year + 1900 < 2025) {
+                Serial.println("ERR: Time still invalid after waiting.");
+            }
+        }
+
         Serial.println("Refresh screen manually.");
+        int _si_type = safeGetInt(PREF_SI_TYPE);
         Preferences pref;
         pref.begin(PREF_NAMESPACE);
-        int _si_type = pref.getInt(PREF_SI_TYPE);
         pref.putInt(PREF_SI_TYPE, _si_type == 0 ? 1 : 0);
         pref.end();
+
         si_screen();
     }
 }
@@ -512,7 +524,7 @@ void preSaveParamsCallback() {
 
 // 双击打开配置页面
 void buttonDoubleClick(void* oneButton) {
-    Serial.println("Button double click.");
+    Serial.println(">>> Button double click triggered!");
     if (wm.getConfigPortalActive()) {
         ESP.restart();
         return;
@@ -524,18 +536,15 @@ void buttonDoubleClick(void* oneButton) {
 
     // 设置配置页面
     // 根据配置信息设置默认值
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE);
-    String qHost = pref.getString(PREF_QWEATHER_HOST);
-    String qToken = pref.getString(PREF_QWEATHER_KEY);
-    String qType = pref.getString(PREF_QWEATHER_TYPE, "0");
-    String qLoc = pref.getString(PREF_QWEATHER_LOC);
-    String cddLabel = pref.getString(PREF_CD_DAY_LABLE);
-    String cddDate = pref.getString(PREF_CD_DAY_DATE);
-    String tagDays = pref.getString(PREF_TAG_DAYS);
-    String week1st = pref.getString(PREF_SI_WEEK_1ST, "0");
-    String studySchedule = pref.getString(PREF_STUDY_SCHEDULE);
-    pref.end();
+    String qHost = safeGetString(PREF_QWEATHER_HOST, "api.qweather.com");
+    String qToken = safeGetString(PREF_QWEATHER_KEY, "");
+    String qType = safeGetString(PREF_QWEATHER_TYPE, "0");
+    String qLoc = safeGetString(PREF_QWEATHER_LOC, "");
+    String cddLabel = safeGetString(PREF_CD_DAY_LABLE, "");
+    String cddDate = safeGetString(PREF_CD_DAY_DATE, "");
+    String tagDays = safeGetString(PREF_TAG_DAYS, "");
+    String week1st = safeGetString(PREF_SI_WEEK_1ST, "0");
+    String studySchedule = safeGetString(PREF_STUDY_SCHEDULE, "");
 
     para_qweather_host.setValue(qHost.c_str(), 64);
     para_qweather_key.setValue(qToken.c_str(), 32);
@@ -583,13 +592,14 @@ void buttonDoubleClick(void* oneButton) {
 
 // 重置系统，并重启
 void buttonLongPressStop(void* oneButton) {
-    Serial.println("Button long press.");
+    Serial.println(">>> Button long press triggered!");
 
     // 删除Preferences，namespace下所有健值对。
     Preferences pref;
     pref.begin(PREF_NAMESPACE);
     pref.clear();
     pref.end();
+    wm.resetSettings();
 
     ESP.restart();
 }
@@ -604,10 +614,7 @@ void go_sleep() {
     WiFi.mode(WIFI_OFF);
 
     // 根据配置情况来刷新，如果未配置qweather信息，则24小时刷新，否则每2小时刷新
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE);
-    String _qweather_key = pref.getString(PREF_QWEATHER_KEY, "");
-    pref.end();
+    String _qweather_key = safeGetString(PREF_QWEATHER_KEY, "");
 
     time_t now;
     time(&now);

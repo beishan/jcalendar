@@ -2,7 +2,39 @@
 #define ___PREFERENCE_H__
 
 #include <Preferences.h>
+#include <Arduino.h>
+
 #define PREF_NAMESPACE "J_CALENDAR"
+
+/**
+ * 安全读取 Preferences 字符串，避免键不存在时打印警告
+ */
+inline String safeGetString(const char* key, const String& defaultValue = "") {
+    Preferences pref;
+    pref.begin(PREF_NAMESPACE);
+    if (pref.isKey(key)) {
+        String value = pref.getString(key);
+        pref.end();
+        return value;
+    }
+    pref.end();
+    return defaultValue;
+}
+
+/**
+ * 安全读取 Preferences 整数，避免键不存在时打印警告
+ */
+inline int safeGetInt(const char* key, int defaultValue = 0) {
+    Preferences pref;
+    pref.begin(PREF_NAMESPACE);
+    if (pref.isKey(key)) {
+        int value = pref.getInt(key);
+        pref.end();
+        return value;
+    }
+    pref.end();
+    return defaultValue;
+}
 
 // Preferences KEY定义
 // !!!preferences key限制15字符

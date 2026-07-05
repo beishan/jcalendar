@@ -595,6 +595,69 @@ void draw_cd_day(String label, String date) {
     }
 }
 
+// 绘制时间（上下结构：小时在上，分钟在下）
+void draw_time(bool partial) {
+    // 先计算倒计日结束位置
+    int16_t cdEndX = calLayout.cdDayX;
+    if (_cd_day_label.length() > 0 && _cd_day_date.length() == 8) {
+        // 倒计日文字宽度估算
+        u8g2Fonts.setFont(FONT_SUB);
+        cdEndX += u8g2Fonts.getUTF8Width("距") + u8g2Fonts.getUTF8Width(_cd_day_label.c_str()) +
+                  u8g2Fonts.getUTF8Width("还有") + 30 + u8g2Fonts.getUTF8Width("天") + 20;
+    }
+
+    // 时间显示位置：在倒计日结束后，天气开始前
+    int16_t timeX = cdEndX + 10;
+    int16_t endX = calLayout.weatherX - 5;
+    int16_t y = calLayout.cdDayY - 8;  // 上方位置
+
+    // 如果空间不足，不显示
+    if (endX - timeX < 30) return;
+
+    if (partial) {
+        int16_t timeW = endX - timeX;
+        display.setPartialWindow(timeX, y - 15, timeW, 30);
+        display.firstPage();
+        display.fillScreen(GxEPD_WHITE);
+    }
+
+    // 格式化小时和分钟
+    char hourStr[3];
+    char minStr[3];
+    snprintf(hourStr, sizeof(hourStr), "%02d", tmInfo.tm_hour);
+    snprintf(minStr, sizeof(minStr), "%02d", tmInfo.tm_min);
+
+    // 设置字体和颜色
+    u8g2Fonts.setFontMode(1);
+    u8g2Fonts.setFontDirection(0);
+    u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+    u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+
+    // 使用较小字体
+    u8g2Fonts.setFont(u8g2_font_fub14_tn);
+
+    // 计算宽度用于居中
+    int16_t hourWidth = u8g2Fonts.getUTF8Width(hourStr);
+    int16_t minWidth = u8g2Fonts.getUTF8Width(minStr);
+    int16_t maxW = hourWidth > minWidth ? hourWidth : minWidth;
+
+    // 居中显示
+    int16_t xPos = timeX + (endX - timeX - maxW) / 2;
+    if (xPos < timeX) xPos = timeX;
+
+    // 绘制小时（上方）
+    u8g2Fonts.setCursor(xPos + (maxW - hourWidth) / 2, y);
+    u8g2Fonts.print(hourStr);
+
+    // 绘制分钟（下方）
+    u8g2Fonts.setCursor(xPos + (maxW - minWidth) / 2, y + 14);
+    u8g2Fonts.print(minStr);
+
+    if (partial) {
+        display.nextPage();
+    }
+}
+
 
 void draw_special_day() {
     String str = "Special Days!!!";
@@ -970,25 +1033,21 @@ void drawStudySchedule() {
 void si_calendar() {
     _calendar_status = 0;
 
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE);
-    int32_t _calendar_date = pref.getInt(PREF_SI_CAL_DATE);
-    _cd_day_label = pref.getString(PREF_CD_DAY_LABLE);
-    _cd_day_date = pref.getString(PREF_CD_DAY_DATE);
-    _tag_days_str = pref.getString(PREF_TAG_DAYS);
-    _week_1st = pref.getString(PREF_SI_WEEK_1ST, "0").toInt();
-    _study_schedule = pref.getString(PREF_STUDY_SCHEDULE);
-    _si_type = pref.getInt(PREF_SI_TYPE);
+    int32_t _calendar_date = safeGetInt(PREF_SI_CAL_DATE);
+    _cd_day_label = safeGetString(PREF_CD_DAY_LABLE, "");
+    _cd_day_date = safeGetString(PREF_CD_DAY_DATE, "");
+    _tag_days_str = safeGetString(PREF_TAG_DAYS, "");
+    _week_1st = safeGetString(PREF_SI_WEEK_1ST, "0").toInt();
+    _study_schedule = safeGetString(PREF_STUDY_SCHEDULE, "");
+    _si_type = safeGetInt(PREF_SI_TYPE);
     if (_study_schedule.isEmpty()) _si_type = 0;
-
-    pref.end();
 
     time_t now = 0;
     time(&now);
     localtime_r(&now, &tmInfo); // 时间戳转化为本地时间结构
     Serial.printf("System Time: %d-%02d-%02d %02d:%02d:%02d\n", (tmInfo.tm_year + 1900), tmInfo.tm_mon + 1, tmInfo.tm_mday, tmInfo.tm_hour, tmInfo.tm_min, tmInfo.tm_sec);
 
-    // 如果当前时间无效，尝试用API时间修复，否则仍继续渲染
+    // 如果当前时间无效，尝试用API时间修复
     if (tmInfo.tm_year + 1900 < 2025) {
         bool isSetOK = false;
         if (weather_status() == 1) {
@@ -1013,13 +1072,13 @@ void si_calendar() {
             } else {
                 Serial.println("ERR: Fail to format api time.");
             }
-        } else {
-            // 天气也未获取成功，使用当前系统时间继续渲染（可能是1970年）
-            Serial.println("WARN: invalid time & no weather info, rendering with system time.");
         }
+
+        // 如果时间仍然无效，返回错误状态
         if (!isSetOK) {
-            Serial.println("WARN: Time not synced, calendar may show incorrect date.");
-            // 不再 return，继续使用当前时间渲染
+            Serial.println("ERR: Time invalid and cannot be fixed.");
+            _calendar_status = 2;
+            return;
         }
     }
 
@@ -1070,6 +1129,9 @@ void task_screen(void* param) {
 
         // 倒计日
         draw_cd_day(_cd_day_label, _cd_day_date);
+
+        // 时间显示（倒计日右侧）
+        draw_time(false);
 
         if (weather_status() == 1) {
             draw_weather(false);

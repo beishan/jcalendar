@@ -34,10 +34,7 @@ DailyForecast* weather_data_daily() {
 void task_weather(void* param) {
     Serial.println("[Task] get weather begin...");
 
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE);
-    _weather_type = pref.getString(PREF_QWEATHER_TYPE).compareTo("1") == 0 ? 1 : 0;
-    pref.end();
+    _weather_type = safeGetString(PREF_QWEATHER_TYPE, "0").compareTo("1") == 0 ? 1 : 0;
 
     Serial.printf("Weather Type: %d\n", _weather_type);
     Serial.printf("Weather Host: %s\n", _qweather_host.c_str());
@@ -78,12 +75,9 @@ void weather_exec(int status) {
     }
 
     // Preference 获取配置信息。
-    Preferences pref;
-    pref.begin(PREF_NAMESPACE);
-    _qweather_host = pref.getString(PREF_QWEATHER_HOST, "api.qweather.com");
-    _qweather_key = pref.getString(PREF_QWEATHER_KEY, "");
-    _qweather_loc = pref.getString(PREF_QWEATHER_LOC, "");
-    pref.end();
+    _qweather_host = safeGetString(PREF_QWEATHER_HOST, "api.qweather.com");
+    _qweather_key = safeGetString(PREF_QWEATHER_KEY, "");
+    _qweather_loc = safeGetString(PREF_QWEATHER_LOC, "");
 
     Serial.printf("Weather config - host: %s, key: %s (len=%d), loc: %s (len=%d)\n",
         _qweather_host.c_str(), _qweather_key.c_str(), _qweather_key.length(),
@@ -108,5 +102,13 @@ void weather_stop() {
         WEATHER_HANDLER = NULL;
     }
     _weather_status = 2;
+}
+
+void weather_reset() {
+    if (WEATHER_HANDLER != NULL) {
+        vTaskDelete(WEATHER_HANDLER);
+        WEATHER_HANDLER = NULL;
+    }
+    _weather_status = -1;
 }
 

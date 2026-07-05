@@ -9,5 +9,6 @@ Weather* weather_data_now();
 DailyForecast* weather_data_daily();
 void weather_exec(int status = 0);
 void weather_stop();
+void weather_reset();  // 重置天气状态，允许重新获取
 
 #endif

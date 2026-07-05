@@ -8,7 +8,7 @@
 
 #include "holiday.h"
 
-TaskHandle_t* _handler;
+TaskHandle_t* _handler = NULL;
 int _status = SYNC_STATUS_IDLE;
 
 int _sntp_status() {
