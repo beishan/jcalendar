@@ -378,13 +378,6 @@ void setup() {
 void loop() {
     button.tick(); // 单击，刷新页面；双击，打开配置；长按，重启
 
-    // 调试：打印按钮引脚状态
-    static unsigned long lastDebugTime = 0;
-    if (millis() - lastDebugTime > 5000) {  // 每5秒打印一次
-        Serial.printf("Button pin (GPIO%d) state: %d\n", KEY_M, digitalRead(KEY_M));
-        lastDebugTime = millis();
-    }
-
     // 新设备配网模式：处理配置门户事件
     if (_new_device_mode) {
         wm.process(); // 处理配置门户请求
@@ -434,10 +427,7 @@ void loop() {
             String _key = safeGetString(PREF_QWEATHER_KEY, "");
             bool _weather_configured = _key.length() > 0;
 
-            if (!_wakeup_by_button && _weather_configured) {
-                go_sleep(); // 定时器唤醒且已配置，立即休眠
-            }
-            // 按键唤醒或天气未配置，等待一段时间再休眠
+            // 按键唤醒或天气未配置，等待一段时间再休眠（至少等待10秒让时间刷新执行）
             unsigned long wait_time = _weather_configured ? 10 * 1000 : 60 * 1000;
             if (millis() - _screen_done_millis > wait_time) {
                 go_sleep();
@@ -458,7 +448,7 @@ void loop() {
 
 // 刷新页面
 void buttonClick(void* oneButton) {
-    Serial.println(">>> Button single click triggered!");
+    Serial.println("Button click.");
 
     if (wm.getConfigPortalActive()) {
         Serial.println("In config status.");
@@ -524,7 +514,7 @@ void preSaveParamsCallback() {
 
 // 双击打开配置页面
 void buttonDoubleClick(void* oneButton) {
-    Serial.println(">>> Button double click triggered!");
+    Serial.println("Button double click.");
     if (wm.getConfigPortalActive()) {
         ESP.restart();
         return;
@@ -592,7 +582,7 @@ void buttonDoubleClick(void* oneButton) {
 
 // 重置系统，并重启
 void buttonLongPressStop(void* oneButton) {
-    Serial.println(">>> Button long press triggered!");
+    Serial.println("Button long press.");
 
     // 删除Preferences，namespace下所有健值对。
     Preferences pref;

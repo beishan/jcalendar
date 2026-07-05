@@ -78,17 +78,13 @@ private:
     WiFiClientSecure wifiClient;
 
     bool getRestfulAPI(String url, callback cb, precall pre = precall()) {
-        Serial.printf("Request Url: %s\n", url.c_str());
         JsonDocument doc;
 
         for (uint8_t i = 0; i < MAX_RETRY; i++) {
             bool shouldRetry = false;
-            Serial.printf("Attempt %d/%d\n", i + 1, MAX_RETRY);
             if (http.begin(wifiClient, url)) {
                 if (pre) pre();
-                Serial.printf("Sending GET request...\n");
                 int httpCode = http.GET();
-                Serial.printf("GET response: %d\n", httpCode);
                 if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_NOT_MODIFIED) {
                     bool isGzip = false;
                     int headers = http.headers();

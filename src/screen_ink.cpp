@@ -606,20 +606,13 @@ void draw_time(bool partial) {
                   u8g2Fonts.getUTF8Width("还有") + 30 + u8g2Fonts.getUTF8Width("天") + 20;
     }
 
-    // 时间显示位置：在倒计日结束后，天气开始前
-    int16_t timeX = cdEndX + 10;
+    // 时间显示位置：在倒计日结束后，天气开始前（再往右移30像素）
+    int16_t timeX = cdEndX + 75;
     int16_t endX = calLayout.weatherX - 5;
-    int16_t y = calLayout.cdDayY - 8;  // 上方位置
+    int16_t y = calLayout.cdDayY - 28;  // 整体往上移
 
     // 如果空间不足，不显示
-    if (endX - timeX < 30) return;
-
-    if (partial) {
-        int16_t timeW = endX - timeX;
-        display.setPartialWindow(timeX, y - 15, timeW, 30);
-        display.firstPage();
-        display.fillScreen(GxEPD_WHITE);
-    }
+    if (endX - timeX < 35) return;
 
     // 格式化小时和分钟
     char hourStr[3];
@@ -627,14 +620,14 @@ void draw_time(bool partial) {
     snprintf(hourStr, sizeof(hourStr), "%02d", tmInfo.tm_hour);
     snprintf(minStr, sizeof(minStr), "%02d", tmInfo.tm_min);
 
-    // 设置字体和颜色
+    // 设置字体和颜色（红色）
     u8g2Fonts.setFontMode(1);
     u8g2Fonts.setFontDirection(0);
-    u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+    u8g2Fonts.setForegroundColor(GxEPD_RED);
     u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
 
-    // 使用较小字体
-    u8g2Fonts.setFont(u8g2_font_fub14_tn);
+    // 使用较大字体
+    u8g2Fonts.setFont(u8g2_font_fub25_tn);
 
     // 计算宽度用于居中
     int16_t hourWidth = u8g2Fonts.getUTF8Width(hourStr);
@@ -649,13 +642,9 @@ void draw_time(bool partial) {
     u8g2Fonts.setCursor(xPos + (maxW - hourWidth) / 2, y);
     u8g2Fonts.print(hourStr);
 
-    // 绘制分钟（下方）
-    u8g2Fonts.setCursor(xPos + (maxW - minWidth) / 2, y + 14);
+    // 绘制分钟（下方，间距调大到28像素）
+    u8g2Fonts.setCursor(xPos + (maxW - minWidth) / 2, y + 28);
     u8g2Fonts.print(minStr);
-
-    if (partial) {
-        display.nextPage();
-    }
 }
 
 
