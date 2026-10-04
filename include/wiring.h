@@ -4,8 +4,8 @@
 
 // ======== 开发板选择 ========
 // 取消注释需要使用的开发板宏定义，只能选择一个
-// #define LOLIN32_LITE
-#define ESP32_DEVKIT
+#define LOLIN32_LITE
+// #define ESP32_DEVKIT
 
 // ============================================================
 // LOLIN32_LITE 引脚定义
